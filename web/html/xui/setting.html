@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+{{template "head" .}}
+<style>
+    @media (min-width: 769px) {
+        .ant-layout-content {
+            margin: 24px 16px;
+        }
+    }
+
+    .ant-col-sm-24 {
+        margin-top: 10px;
+    }
+
+    .ant-tabs-bar {
+        margin: 0;
+    }
+
+    .ant-list-item {
+        display: block;
+    }
+
+    .ant-tabs-top-bar {
+        background: white;
+    }
+</style>
+<body>
+<a-layout id="app" v-cloak>
+    {{ template "commonSider" . }}
+    <a-layout id="content-layout">
+        <a-layout-content>
+            <a-spin :spinning="spinning" :delay="500" tip="loading">
+                <a-space direction="vertical">
+                    <a-space direction="horizontal">
+                        <a-button type="primary" :disabled="saveBtnDisable" @click="updateAllSetting">Save configuration</a-button>
+                        <a-button type="danger" :disabled="!saveBtnDisable" @click="restartPanel">Restart panel</a-button>
+                    </a-space>
+                    <a-tabs default-active-key="1">
+                        <a-tab-pane key="1" tab="Panel configuration">
+                            <a-list item-layout="horizontal" style="background: white">
+                                <setting-list-item type="text" title="Panel listening IP" desc="Leave blank by default to monitor all IPs, restart the panel to take effect" v-model="allSetting.webListen"></setting-list-item>
+                                <setting-list-item type="number" title="Panel listening port" desc="Restart the panel to take effect" v-model.number="allSetting.webPort"></setting-list-item>
+                                <setting-list-item type="text" title="Panel certificate public-key file path" desc="Fill in an absolute path starting with '/', restart the panel to take effect" v-model="allSetting.webCertFile"></setting-list-item>
+                                <setting-list-item type="text" title="Panel certificate key file path" desc="Fill in an absolute path starting with '/', restart the panel to take effect" v-model="allSetting.webKeyFile"></setting-list-item>
+                                <setting-list-item type="text" title="Panel url root path" desc="Must start with '/' and end with '/', restart the panel to take effect" v-model="allSetting.webBasePath"></setting-list-item>
+                            </a-list>
+                        </a-tab-pane>
+                        <a-tab-pane key="2" tab="User settings">
+                            <a-form style="background: white; padding: 20px">
+                                <a-form-item label="original user name">
+                                    <a-input v-model="user.oldUsername" style="max-width: 300px"></a-input>
+                                </a-form-item>
+                                <a-form-item label="old password">
+                                    <a-input type="password" v-model="user.oldPassword"
+                                             style="max-width: 300px"></a-input>
+                                </a-form-item>
+                                <a-form-item label="new user name">
+                                    <a-input v-model="user.newUsername" style="max-width: 300px"></a-input>
+                                </a-form-item>
+                                <a-form-item label="new password">
+                                    <a-input type="password" v-model="user.newPassword"
+                                             style="max-width: 300px"></a-input>
+                                </a-form-item>
+                                <a-form-item>
+                                    <a-button type="primary" @click="updateUser">Revise</a-button>
+                                </a-form-item>
+                            </a-form>
+                        </a-tab-pane>
+                        <a-tab-pane key="3" tab="xray related settings">
+                            <a-list item-layout="horizontal" style="background: white">
+                                <setting-list-item type="textarea" title="xray configuration template" desc="Generate the final xray configuration file based on this template, restart the panel to take effect" v-model="allSetting.xrayTemplateConfig"></setting-list-item>
+                            </a-list>
+                        </a-tab-pane>
+                        <a-tab-pane key="4" tab="TG reminder related settings">
+                            <a-list item-layout="horizontal" style="background: white">
+                                <setting-list-item type="switch" title="Enable telegram bot" desc="Restart the panel to take effect"  v-model="allSetting.tgBotEnable"></setting-list-item>
+                                <setting-list-item type="text" title="Telegram Robot TOKEN" desc="Restart the panel to take effect"  v-model="allSetting.tgBotToken"></setting-list-item>
+                                <setting-list-item type="number" title="Telegram bot ChatId" desc="Restart the panel to take effect"  v-model.number="allSetting.tgBotChatId"></setting-list-item>
+                                <setting-list-item type="text" title="Telegram bot notification time" desc="Using Crontab timing format, restart the panel to take effect"  v-model="allSetting.tgRunTime"></setting-list-item>
+                            </a-list>
+                        </a-tab-pane>
+                        <a-tab-pane key="5" tab="other settings">
+                            <a-list item-layout="horizontal" style="background: white">
+                                <setting-list-item type="text" title="Time zone" desc="The scheduled task runs according to the time in this time zone, and restarts the panel to take effect." v-model="allSetting.timeLocation"></setting-list-item>
+                            </a-list>
+                        </a-tab-pane>
+                    </a-tabs>
+                </a-space>
+            </a-spin>
+        </a-layout-content>
+    </a-layout>
+</a-layout>
+{{template "js" .}}
+{{template "component/setting"}}
+<script>
+
+    const app = new Vue({
+        delimiters: ['[[', ']]'],
+        el: '#app',
+        data: {
+            siderDrawer,
+            spinning: false,
+            oldAllSetting: new AllSetting(),
+            allSetting: new AllSetting(),
+            saveBtnDisable: true,
+            user: {},
+        },
+        methods: {
+            loading(spinning = true) {
+                this.spinning = spinning;
+            },
+            async getAllSetting() {
+                this.loading(true);
+                const msg = await HttpUtil.post("/xui/setting/all");
+                this.loading(false);
+                if (msg.success) {
+                    this.oldAllSetting = new AllSetting(msg.obj);
+                    this.allSetting = new AllSetting(msg.obj);
+                    this.saveBtnDisable = true;
+                }
+            },
+            async updateAllSetting() {
+                this.loading(true);
+                const msg = await HttpUtil.post("/xui/setting/update", this.allSetting);
+                this.loading(false);
+                if (msg.success) {
+                    await this.getAllSetting();
+                }
+            },
+            async updateUser() {
+                this.loading(true);
+                const msg = await HttpUtil.post("/xui/setting/updateUser", this.user);
+                this.loading(false);
+                if (msg.success) {
+                    this.user = {};
+                }
+            },
+            async restartPanel() {
+                await new Promise(resolve => {
+                    this.$confirm({
+                        title: 'Restart panel',
+                        content: 'Are you sure you want to restart the panel? Click OK to restart after 3 seconds. (If you cannot access the panel after restarting, please go to the server to view the panel log information)',
+                        okText: 'Sure',
+                        cancelText: 'Cancel',
+                        onOk: () => resolve(),
+                    });
+                });
+                this.loading(true);
+                const msg = await HttpUtil.post("/xui/setting/restartPanel");
+                this.loading(false);
+                if (msg.success) {
+                    this.loading(true);
+                    await PromiseUtil.sleep(5000);
+                    location.reload();
+                }
+            }
+        },
+        async mounted() {
+            await this.getAllSetting();
+            while (true) {
+                await PromiseUtil.sleep(1000);
+                this.saveBtnDisable = this.oldAllSetting.equals(this.allSetting);
+            }
+        },
+    });
+
+</script>
+</body>
+</html>
